@@ -54,7 +54,7 @@
             font-size: 15px; 
             box-shadow: 0 4px 12px rgba(0,0,0,0.4); 
             z-index: 1000; 
-            pointer-events: auto; /* Ակտիվացված է սեղմելու համար */
+            pointer-events: auto; 
             border: 1px solid #4a5568; 
             text-transform: uppercase; 
             letter-spacing: 0.5px; 
@@ -75,10 +75,12 @@
         .btn-info { background: #3182ce; }
         .btn-edit-popup { background: #3182ce; margin-top: 6px; font-size: 12px; padding: 6px; display: block; width: 100%; text-align: center; color: white; }
 
-        .sub-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px; margin: 5px 0; border-radius: 4px; background: rgba(255,255,255,0.05); font-size: 13px; cursor: pointer; border-left: 4px solid #63b3ed; transition: all 0.2s; }
+        .sub-item { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px; margin: 5px 0; border-radius: 4px; background: rgba(255,255,255,0.05); font-size: 13px; cursor: pointer; border-left: 4px solid #63b3ed; transition: all 0.2s; }
         .sub-item:hover { background: rgba(255,255,255,0.1); }
         
-        .delete-btn-list { color: #fc8181; font-weight: bold; padding: 2px 6px; border-radius: 4px; cursor: pointer; }
+        .list-btn-action { color: #a0aec0; font-weight: bold; padding: 2px 4px; border-radius: 4px; cursor: pointer; font-size: 12px; user-select: none; }
+        .list-btn-action:hover { color: white; background: rgba(255, 255, 255, 0.15); }
+        .delete-btn-list { color: #fc8181; }
         .delete-btn-list:hover { background: rgba(229, 62, 62, 0.2); }
 
         .custom-div-icon { background: none; border: none; text-align: center; display: flex; align-items: center; justify-content: center; }
@@ -198,6 +200,9 @@
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
 
+    // Կետերի հաջորդականությունը պահպանող զանգված
+    let orderedLayers = [];
+
     let currentUser = null; 
 
     const drawControl = new L.Control.Draw({
@@ -221,7 +226,7 @@
         if (clickCount === 1) {
             clickTimer = setTimeout(() => {
                 clickCount = 0;
-            }, 800); // 0.8 վայրկյանի ընթացքում 3 սեղմում
+            }, 800); 
         } else if (clickCount === 3) {
             clearTimeout(clickTimer);
             clickCount = 0;
@@ -256,6 +261,7 @@
             
             enableAuthorTools();
             drawnItems.eachLayer(layer => updatePopup(layer));
+            updateLegend();
         } else {
             err.style.display = 'block';
         }
@@ -449,10 +455,23 @@
             if (layer) {
                 drawnItems.removeLayer(layer);
                 map.removeLayer(layer);
+                orderedLayers = orderedLayers.filter(l => l !== layer);
                 updateLegend();
                 map.closePopup();
             }
         }
+    }
+
+    // ԿԵՏԵՐԻ ԴԻՐՔԻ ՓՈՓՈԽՈՒԹՅՈՒՆ
+    function moveItemOrder(index, direction) {
+        const newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= orderedLayers.length) return;
+
+        const temp = orderedLayers[index];
+        orderedLayers[index] = orderedLayers[newIndex];
+        orderedLayers[newIndex] = temp;
+
+        updateLegend();
     }
 
     function updateLegend() {
@@ -460,7 +479,7 @@
         if (!list) return;
         list.innerHTML = '';
         
-        drawnItems.eachLayer(l => {
+        orderedLayers.forEach((l, index) => {
             const id = drawnItems.getLayerId(l);
             const subItem = document.createElement('div');
             subItem.className = 'sub-item';
@@ -478,14 +497,36 @@
             subItem.appendChild(titleSpan);
 
             if (currentUser === "MKHITAR") {
+                // Վերև/Ներքև տեղաշարժման կոճակներ
+                const upBtn = document.createElement('span');
+                upBtn.className = 'list-btn-action';
+                upBtn.innerText = '⬆️';
+                upBtn.title = 'Տեղափոխել վերև';
+                upBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    moveItemOrder(index, -1);
+                };
+
+                const downBtn = document.createElement('span');
+                downBtn.className = 'list-btn-action';
+                downBtn.innerText = '⬇️';
+                downBtn.title = 'Տեղափոխել ներքև';
+                downBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    moveItemOrder(index, 1);
+                };
+
                 const delBtn = document.createElement('span');
-                delBtn.className = 'delete-btn-list';
+                delBtn.className = 'list-btn-action delete-btn-list';
                 delBtn.innerText = '❌';
                 delBtn.title = 'Ջնջել';
                 delBtn.onclick = (e) => {
                     e.stopPropagation();
                     deleteLayerData(id);
                 };
+
+                if (index > 0) subItem.appendChild(upBtn);
+                if (index < orderedLayers.length - 1) subItem.appendChild(downBtn);
                 subItem.appendChild(delBtn);
             }
 
@@ -495,7 +536,7 @@
 
     function saveMapToURL() {
         const dataToSave = [];
-        drawnItems.eachLayer(layer => {
+        orderedLayers.forEach(layer => {
             const geojson = layer.toGeoJSON();
             geojson.properties = {
                 title: layer.options.title,
@@ -552,6 +593,8 @@
             document.getElementById('mapTitleInput').value = mapTitle;
             updateLiveTitle(mapTitle);
 
+            orderedLayers = [];
+
             geojsonArray.forEach(item => {
                 L.geoJSON(item, {
                     pointToLayer: function (feature, latlng) {
@@ -571,6 +614,7 @@
                         }
 
                         drawnItems.addLayer(layer);
+                        orderedLayers.push(layer);
                         attachLayerClickEvent(layer);
                     }
                 });
@@ -592,6 +636,7 @@
         if (e.layerType === 'marker') updateSingleMarkerIcon(layer); 
 
         drawnItems.addLayer(layer);
+        orderedLayers.push(layer);
         attachLayerClickEvent(layer);
         updateLegend();
         
